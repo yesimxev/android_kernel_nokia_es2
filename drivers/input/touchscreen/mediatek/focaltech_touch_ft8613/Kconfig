@@ -1,0 +1,23 @@
+#
+# Touchscreen driver configuration
+#
+config TOUCHSCREEN_MTK_FOCALTECH_TS
+    bool "Focaltech Ts for Mediatek"
+    depends on I2C
+    default n
+    help
+      Say Y here if you have Focaltech touch panel.
+      If unsure, say N.
+
+config TOUCHSCREEN_MTK_FTS_DIRECTORY
+    string "Focaltech ts directory name"
+    default "focaltech_touch"
+    depends on TOUCHSCREEN_MTK_FOCALTECH_TS
+
+config TOUCHSCREEN_FOCALTECH_TS_DEBUG
+    bool "Focaltech Ts for Debug"
+    depends on TOUCHSCREEN_MTK_FOCALTECH_TS
+    default n
+    help
+      Say Y here if you want to debug Focaltech touch panel
+      If unsure, say N.

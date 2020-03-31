@@ -1,0 +1,23 @@
+#
+# Novatek NT36xxx touchscreen driver configuration
+#
+
+
+config TOUCHSCREEN_NT36xxx
+	bool "Novatek NT36xxx"
+	default n
+	help
+	  Say Y here if you have a Novatek NT36xxx touchscreen connected
+	  to your system.
+
+	  If unsure, say N.
+
+config GTP_USE_PMIC_DETECT_USB_PLUGIN
+	bool "GTP_USE_PMIC_DETECT_USB_PLUGIN"
+	default n
+	help
+	Say Y here if you have touch panel use mtk pmic to enbale
+	the charger(default N is use work queue to check).
+
+	If unsure, say N.
+

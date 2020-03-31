@@ -1,0 +1,9 @@
+#
+# Configuration for FIH
+#
+
+config FIH_FINGERPRINT
+	bool "FIH Fingerprint Driver"
+	default n
+	---help---
+	  This is a FIH fingerprint chipset Driver.
