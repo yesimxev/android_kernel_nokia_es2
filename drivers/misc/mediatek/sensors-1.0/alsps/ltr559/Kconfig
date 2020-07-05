@@ -1,0 +1,11 @@
+config MTK_LTR559
+	bool "LTR556 for MediaTek package"
+	default n
+
+config MTK_ALSPS_ES2
+	bool "LTR556 for MediaTek package"
+	default n
+
+config MTK_ALSPS_CO2
+	bool "LTR556 for MediaTek package"
+	default n

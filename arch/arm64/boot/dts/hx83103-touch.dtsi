@@ -1,0 +1,8 @@
+&i2c0 {
+
+	hx83103_touch@48 {
+		compatible = "himax,hx83103_touch";
+		reg = <0x48>;
+		status = "ok";
+	};
+};
