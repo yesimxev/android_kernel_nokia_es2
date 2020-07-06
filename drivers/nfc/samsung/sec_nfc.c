@@ -42,7 +42,7 @@
 #include <asm/uaccess.h>
 #include <linux/dma-mapping.h>
 #include <linux/nfc/sec_nfc.h>
-#include <../../misc/mediatek/base/power/include/mt_clkbuf_ctl.h>	/*  for clock buffer */
+#include "../../misc/mediatek/base/power/include/mt_clkbuf_ctl.h"	/*  for clock buffer */
 #include <linux/regulator/consumer.h>
 
 #ifdef CONFIG_SEC_NFC_CLK_REQ
@@ -51,8 +51,8 @@
 #include <linux/wakelock.h>
 #include <linux/of_gpio.h>
 #include <linux/clk.h>
-#include <../../misc/mediatek/include/mt-plat/mt_boot_common.h>
-#include <../../misc/mediatek/include/mt-plat/mt_gpio.h>
+#include "../../misc/mediatek/include/mt-plat/mt_boot_common.h"
+#include "../../misc/mediatek/include/mt-plat/mt_gpio.h"
 #include <linux/kthread.h>
 
 #ifndef CONFIG_SEC_NFC_IF_I2C

@@ -15,7 +15,7 @@
 #define __M4U_V2_H__
 #include <linux/ioctl.h>
 #include <linux/fs.h>
-#include "m4u_port.h"
+#include "../../m4u/mt6755/m4u_port.h"
 #include <linux/scatterlist.h>
 
 typedef int M4U_PORT_ID;

@@ -17,7 +17,7 @@
 #include "extd_log.h"
 #include "extd_factory.h"
 #include "extd_info.h"
-#include "external_display.h"
+#include "mt6755/external_display.h"
 
 #include "dpi_dvt_test.h"
 
