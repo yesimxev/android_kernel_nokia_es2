@@ -28,6 +28,7 @@
 #include <ddp_reg.h>
 #include <ddp_path.h>
 #include <ddp_gamma.h>
+#include <ddp_pq.h>
 #include <disp_drv_platform.h>
 #if defined(CONFIG_ARCH_MT6755) || defined(CONFIG_ARCH_MT6797) || defined(CONFIG_ARCH_MT6757)
 #include <disp_helper.h>
@@ -793,6 +794,9 @@ static int ccorr_ioctl(DISP_MODULE_ENUM module, void *handle,
 
 static int disp_ccorr_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, void *cmdq)
 {
+	struct DISP_COLOR_TRANSFORM color_transform;
+	unsigned int i;
+
 	switch (msg) {
 	case DISP_IOCTL_SET_CCORR:
 		if (disp_ccorr_set_coef((DISP_CCORR_COEF_T *) arg, cmdq) < 0) {
@@ -829,6 +833,21 @@ static int disp_ccorr_io(DISP_MODULE_ENUM module, int msg, unsigned long arg, vo
 		}
 		break;
 #endif
+	case DISP_IOCTL_SUPPORT_COLOR_TRANSFORM:
+		if (copy_from_user(&color_transform, (void *)arg,
+			sizeof(struct DISP_COLOR_TRANSFORM))) {
+			CCORR_ERR("DISP_IOCTL_SUPPORT_COLOR_TRANSFORM: failed");
+			return -EFAULT;
+		}
+
+		for (i = 0 ; i < 3; i++) {
+			if (color_transform.matrix[3][i] != 0 ||
+				color_transform.matrix[i][3] != 0) {
+				CCORR_DBG("unsupported matrix");
+				return -EFAULT;
+			}
+		}
+		break;
 	}
 
 	return 0;

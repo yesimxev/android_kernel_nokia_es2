@@ -122,7 +122,7 @@ static void notify_render_aware_timeout(void)
 	mutex_unlock(&notify_lock);
 }
 
-void notify_frame_complete(long frame_time)
+void notify_frame_complete(void)
 {
 	/* lock is mandatory*/
 	WARN_ON(!mutex_is_locked(&notify_lock));
@@ -132,7 +132,9 @@ void notify_frame_complete(long frame_time)
 
 	enable_ui_update_timer();
 	is_render_aware_boost = 1;
+	/*
 	pr_debug(TAG"enable UI boost, frame update, is_render_aware_boost:%d", is_render_aware_boost);
+	*/
 	perfmgr_boost(is_render_aware_boost | is_touch_boost, tboost_core, tboost_freq);
 }
 
@@ -209,8 +211,17 @@ long device_ioctl(struct file *filp,
 		break;
 
 	/*receive frame_time info*/
-	case FPSGO_FRAME_COMPLETE:
-		notify_frame_complete(msgKM->frame_time);
+	case FPSGO_QUEUE:
+		notify_frame_complete();
+		break;
+
+	case FPSGO_DEQUEUE:
+		/* FALLTHROUGH */
+	case FPSGO_QUEUE_CONNECT:
+		/* FALLTHROUGH */
+	case FPSGO_VSYNC:
+		/* FALLTHROUGH */
+	case FPSGO_BQID:
 		break;
 
 	default:

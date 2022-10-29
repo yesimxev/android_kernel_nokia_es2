@@ -29,6 +29,7 @@
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
+#include <mt-plat/mt_ccci_common.h>
 
 #include "ccci_util_log.h"
 #include "ccci_util_lib_main.h"
@@ -66,6 +67,15 @@ static struct class *s_ccci_bd_class;
 static dev_t s_md_status_dev;
 struct cdev s_bd_char_dev;
 
+struct last_md_status_event {
+	int has_value;
+	int md_id;
+	struct timeval time_stamp;
+	int event_type;
+	char reason[32];
+};
+
+static struct last_md_status_event last_md_status[MAX_MD_NUM];
 
 #define CCCI_UTIL_BC_MAGIC 'B'  /*magic */
 
@@ -118,6 +128,52 @@ static void inject_event_helper(struct ccci_util_bc_user_ctlb *user_ctlb, int md
 	user_ctlb->pending_event_cnt++;
 }
 
+static void save_last_md_status(int md_id,
+		struct timeval *time_stamp, int event_type, char reason[])
+{
+	/* MD_STA_EV_HS1 = 9
+	 * ignore events before MD_STA_EV_HS1
+	 */
+	if (event_type < 9)
+		return;
+
+	CCCI_UTIL_DBG_MSG("[%s] md_id = %d; event_type = %d\n",
+			__func__, md_id, event_type);
+
+	last_md_status[md_id].has_value = 1;
+	last_md_status[md_id].md_id = md_id;
+	last_md_status[md_id].time_stamp = *time_stamp;
+	last_md_status[md_id].event_type = event_type;
+
+	if (reason != NULL)
+		snprintf(last_md_status[md_id].reason, 32, "%s", reason);
+	else
+		snprintf(last_md_status[md_id].reason, 32, "%s", "----");
+}
+
+static void send_last_md_status_to_user(int md_id,
+		struct ccci_util_bc_user_ctlb *user_ctlb)
+{
+	int i;
+
+	CCCI_UTIL_DBG_MSG("[%s] md_id = %d; user_name = %s\n",
+			__func__, md_id, user_ctlb->user_name);
+
+	/* md_id == -1, that means it's ccci_mdx_sta */
+	for (i = 0; i < MAX_MD_NUM; i++) {
+		if ((last_md_status[i].has_value == 1) &&
+			(md_id == -1 || md_id == last_md_status[i].md_id)) {
+
+			inject_event_helper(user_ctlb,
+					last_md_status[i].md_id,
+					&last_md_status[i].time_stamp,
+					last_md_status[i].event_type,
+					last_md_status[i].reason);
+		}
+	}
+}
+
+
 void inject_md_status_event(int md_id, int event_type, char reason[])
 {
 	struct timeval time_stamp;
@@ -134,7 +190,9 @@ void inject_md_status_event(int md_id, int event_type, char reason[])
 		md_mark = 0;
 
 	do_gettimeofday(&time_stamp);
+
 	spin_lock_irqsave(&s_event_update_lock, flag);
+	save_last_md_status(md_id, &time_stamp, event_type, reason);
 	for (i = 0; i < MD_BC_MAX_NUM; i++) {
 		if (s_bc_ctl_tbl[i]->md_bit_mask & md_mark) {
 			list_for_each_entry(user_ctlb, &s_bc_ctl_tbl[i]->user_list, node)
@@ -223,6 +281,7 @@ static int ccci_util_bc_open(struct inode *inode, struct file *filp)
 
 	spin_lock_irqsave(&s_event_update_lock, flag);
 	list_add_tail(&user_ctlb->node, &bc_dev->user_list);
+	send_last_md_status_to_user(minor - 1, user_ctlb);
 	spin_unlock_irqrestore(&s_event_update_lock, flag);
 
 	return 0;
@@ -518,6 +577,8 @@ int ccci_util_broadcast_init(void)
 	int i;
 	dev_t dev_n;
 
+	memset(last_md_status, 0, sizeof(last_md_status));
+
 	for (i = 0; i < MD_BC_MAX_NUM; i++) {
 		s_bc_ctl_tbl[i] = kmalloc(sizeof(struct bc_ctl_block_t), GFP_KERNEL);
 		if (s_bc_ctl_tbl[i] == NULL)
@@ -537,14 +598,14 @@ int ccci_util_broadcast_init(void)
 	s_md1_user_request_lock_cnt = 0;
 	s_md3_user_request_lock_cnt = 0;
 
-	ret = alloc_chrdev_region(&s_md_status_dev, 0, 3, "ccci_md_sta");
+	ret = alloc_chrdev_region(&s_md_status_dev, 0, 4, "ccci_md_sta");
 	if (ret != 0) {
 		CCCI_UTIL_ERR_MSG("alloc chrdev fail for ccci_md_sta(%d)\n", ret);
 		goto _exit_1;
 	}
 	cdev_init(&s_bd_char_dev, &broad_cast_fops);
 	s_bd_char_dev.owner = THIS_MODULE;
-	ret = cdev_add(&s_bd_char_dev, s_md_status_dev, 3);
+	ret = cdev_add(&s_bd_char_dev, s_md_status_dev, 4);
 	if (ret) {
 		CCCI_UTIL_ERR_MSG("cdev_add failed\n");
 		goto _exit_2;

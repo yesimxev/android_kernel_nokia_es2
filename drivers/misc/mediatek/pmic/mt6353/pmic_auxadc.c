@@ -34,6 +34,7 @@
 #include <linux/sched.h>
 #include <linux/writeback.h>
 #include <linux/seq_file.h>
+#include <linux/ratelimit.h>
 
 #include <linux/uaccess.h>
 
@@ -237,6 +238,7 @@ unsigned int PMIC_IMM_GetOneChannelValue(pmic_adc_ch_list_enum dwChannel, int de
 	signed int adc_result = 0;
 	int count = 0;
 	unsigned int busy;
+	static DEFINE_RATELIMIT_STATE(ratelimit, 1 * HZ, 5);
 	/*
 	   PMIC_AUX_BATSNS_AP =         0x000,
 	   PMIC_AUX_ISENSE_AP,
@@ -497,11 +499,6 @@ unsigned int PMIC_IMM_GetOneChannelValue(pmic_adc_ch_list_enum dwChannel, int de
 		/*r_val_temp = 2;*/
 		r_val_temp = 1; /*--VTREF--*/
 		adc_result = (ret_data * r_val_temp * VOLTAGE_FULL_RANGE) / 4096;
-		if (adc_result < 0x200) {
-			pr_err("[AUXADC] ch3 high bat temp(%x, %x, %x)\n", adc_result,
-				ret_data, pmic_get_register_value(PMIC_BATON_TDET_EN));
-			pmic_auxadc_debug(0x23);
-		}
 		break;
 	case 4:
 		r_val_temp = 1;
@@ -583,8 +580,12 @@ unsigned int PMIC_IMM_GetOneChannelValue(pmic_adc_ch_list_enum dwChannel, int de
 		wake_unlock(&pmicAuxadc_irq_lock);
 		return -1;
 	}
-	//PMICLOG2("[AUXADC] ch:%d(%x, %x, %x, %x)\n", dwChannel, adc_result,
-	//	ret_data, g_pmic_pad_vbif28_vol, pmic_get_register_value(PMIC_BATON_TDET_EN));
+	if (__ratelimit(&ratelimit)) {
+		PMICLOG2("[AUXADC] ch:%d(%x, %x, %x, %x)\n",
+			 dwChannel, adc_result, ret_data,
+			 g_pmic_pad_vbif28_vol,
+			 pmic_get_register_value(PMIC_BATON_TDET_EN));
+	}
 	mutex_unlock(&pmic_adc_mutex);
 	wake_unlock(&pmicAuxadc_irq_lock);
 	/*

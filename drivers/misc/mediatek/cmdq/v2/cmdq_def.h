@@ -22,7 +22,7 @@
 #ifdef CMDQ_COMMON_ENG_SUPPORT
 #include "cmdq_engine_common.h"
 #else
-#include "mt6755/cmdq_engine.h"
+#include "cmdq_engine.h"
 #endif
 
 #define CMDQ_SPECIAL_SUBSYS_ADDR (99)
@@ -56,7 +56,7 @@
 
 #define CMDQ_INITIAL_CMD_BLOCK_SIZE     (PAGE_SIZE)
 #define CMDQ_INST_SIZE                  (2 * sizeof(uint32_t))	/* instruction is 64-bit */
-#define CMDQ_CMD_BUFFER_SIZE			(PAGE_SIZE)
+#define CMDQ_CMD_BUFFER_SIZE			(PAGE_SIZE - 256)
 
 #define CMDQ_MAX_LOOP_COUNT             (1000000)
 #define CMDQ_MAX_INST_CYCLE             (27)

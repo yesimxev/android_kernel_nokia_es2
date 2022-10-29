@@ -1068,8 +1068,8 @@ int port_proxy_stop_md(struct port_proxy *proxy_p, unsigned int stop_type)
 	int ret = 0;
 
 	proxy_p->sim_type = 0xEEEEEEEE; /* reset sim_type(MCC/MNC) to 0xEEEEEEEE */
-	ret = ccci_fsm_append_command(proxy_p->md_obj, CCCI_COMMAND_STOP, CCCI_CMD_FLAG_WAIT_FOR_COMPLETE |
-		(stop_type == MD_FLIGHT_MODE_ENTER ? CCCI_CMD_FLAG_FLIGHT_MODE : 0));
+	ret = ccci_fsm_append_command(proxy_p->md_obj, CCCI_COMMAND_STOP,
+		stop_type == MD_FLIGHT_MODE_ENTER ? CCCI_CMD_FLAG_FLIGHT_MODE : 0);
 	return ret;
 }
 
@@ -1078,7 +1078,7 @@ int port_proxy_start_md(struct port_proxy *proxy_p)
 	int ret = 0;
 
 	proxy_p->mdlog_dump_done = 0;
-	ret = ccci_fsm_append_command(proxy_p->md_obj, CCCI_COMMAND_START, CCCI_CMD_FLAG_WAIT_FOR_COMPLETE);
+	ret = ccci_fsm_append_command(proxy_p->md_obj, CCCI_COMMAND_START, 0);
 	return ret;
 }
 
@@ -1130,6 +1130,20 @@ static void port_proxy_set_traffic_flag(struct port_proxy *proxy_p, unsigned int
 				port->flags |= (PORT_F_CH_TRAFFIC | PORT_F_DUMP_RAW_DATA);
 		}
 	}
+}
+
+static long port_proxy_get_mdinit_killed(unsigned long arg)
+{
+	unsigned int mdinit_killed = 0;
+
+	mdinit_killed = (unsigned int)get_mdinit_killed();
+	if (put_user(mdinit_killed, (unsigned int __user *)arg)) {
+		CCCI_ERROR_LOG(-1, CHAR, "[%s] error: put_user fail!\n",
+			__func__);
+		return -EFAULT;
+	}
+
+	return 0;
 }
 
 long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd, unsigned long arg)
@@ -1463,27 +1477,6 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 		md_type = ccci_md_get_load_saving_type(proxy_p->md_obj);
 		ret = put_user(md_type, (unsigned int __user *)arg);
 		break;
-	case CCCI_IOC_GET_RAT_STR:
-		ret = ccci_get_rat_str_from_drv(proxy_p->md_id, (char *)md_boot_data, sizeof(md_boot_data));
-		if (ret < 0)
-			CCCI_NORMAL_LOG(md_id, CHAR, "get md rat sting fail: gen str fail! %d\n", (int)ret);
-		else {
-			if (copy_to_user((void __user *)arg, (char *)md_boot_data,
-						strlen((char *)md_boot_data) + 1)) {
-				CCCI_NORMAL_LOG(md_id, CHAR, "get md rat sting fail: copy_from_user fail!\n");
-				ret = -EFAULT;
-			}
-		}
-		break;
-	case CCCI_IOC_SET_RAT_STR:
-		if (strncpy_from_user((char *)md_boot_data, (void __user *)arg, sizeof(md_boot_data))) {
-			CCCI_NORMAL_LOG(md_id, CHAR, "set rat string fail: copy_from_user fail!\n");
-			ret = -EFAULT;
-			break;
-		}
-		ccci_set_rat_str_to_drv(proxy_p->md_id, (char *)md_boot_data);
-		break;
-
 	case CCCI_IOC_GET_EXT_MD_POST_FIX:
 		if (copy_to_user((void __user *)arg, ccci_md_get_post_fix(proxy_p->md_obj), IMG_POSTFIX_LEN)) {
 			CCCI_BOOTUP_LOG(md_id, CHAR, "CCCI_IOC_GET_EXT_MD_POST_FIX: copy_to_user fail\n");
@@ -1583,6 +1576,11 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 		CCCI_NORMAL_LOG(md_id, CHAR, "reset md pccif ioctl called by %s\n", current->comm);
 		ccci_md_reset_pccif(proxy_p->md_obj);
 		break;
+
+	case CCCI_IOC_GET_MDINIT_KILLED:
+		ret = port_proxy_get_mdinit_killed(arg);
+		break;
+
 	case CCCI_IOC_SET_EFUN:
 		if (copy_from_user(&sim_mode, (void __user *)arg, sizeof(unsigned int))) {
 			CCCI_ERR_MSG(md_id, CHAR, "set efun fail: copy_from_user fail!\n");

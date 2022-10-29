@@ -643,6 +643,14 @@ static irqreturn_t md_cd_wdt_isr(int irq, void *data)
 	ccif_write32(md_ctrl->md_rgu_base, C2K_WDT_MD_MODE, C2K_WDT_MD_MODE_KEY);
 	CCCI_NORMAL_LOG(md->index, TAG, "WDT IRQ disabled for debug, state=%X\n", state);
 #endif
+
+	if (md->index == MD_SYS3) {
+		CCCI_NORMAL_LOG(md->index, TAG, "ignore MD3 WDT IRQ\n");
+		ccci_event_log("md%d: ignore MD WDT IRQ\n", md->index);
+
+		return IRQ_HANDLED;
+	}
+
 	CCCI_NORMAL_LOG(md->index, TAG, "MD WDT IRQ\n");
 	ccci_event_log("md%d: MD WDT IRQ\n", md->index);
 

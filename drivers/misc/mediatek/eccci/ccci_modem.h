@@ -134,7 +134,11 @@ struct ccci_modem {
 	struct work_struct scp_md_state_sync_work;
 #endif
 	struct ccci_fsm_ctl fsm;
+	int needforcestop;
 };
+
+extern unsigned int is_cdma2000_enable(int md_id);
+
 /****************************************************************************************************************/
 /* API Region called by sub-modem class, reuseable API */
 /****************************************************************************************************************/

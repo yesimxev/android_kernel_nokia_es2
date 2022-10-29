@@ -224,6 +224,10 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	int log_offset = 0, log_ret;
 #endif /* CONFIG_MT_ENG_BUILD*/
 
+#ifdef MTK_LMK_USER_EVENT
+	int duraspeed_threshold = 0;
+#endif
+
 	/* Do not use in kernel lowmemorykiller */
 	if (IS_ENABLED(CONFIG_MEMCG) && (lowmem_minfree[0] == 0))
 		return SHRINK_STOP;
@@ -288,6 +292,16 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		}
 	}
 
+#ifdef MTK_LMK_USER_EVENT
+	duraspeed_threshold = lowmem_minfree[array_size - 1] * 7 / 4;
+	if ((other_free < duraspeed_threshold && other_file < duraspeed_threshold)
+			|| min_score_adj < OOM_SCORE_ADJ_MAX + 1) {
+		/* Send uevent if needed */
+		if (mtklmk_initialized && current_is_kswapd() && mtklmk_uevent_timeout)
+			mtklmk_uevent(min_score_adj, minfree);
+	}
+#endif
+
 	/* If in CPU hotplugging, let LMK be more aggressive */
 	if (in_cpu_hotplugging) {
 		pr_alert("Aggressive LMK during CPU hotplug!\n");
@@ -317,12 +331,6 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 	}
 
 	selected_oom_score_adj = min_score_adj;
-
-#ifdef MTK_LMK_USER_EVENT
-	/* Send uevent if needed */
-	if (mtklmk_initialized && current_is_kswapd() && mtklmk_uevent_timeout)
-		mtklmk_uevent(min_score_adj, minfree);
-#endif
 
 	/* More debug log */
 	if (output_expect(enable_candidate_log)) {

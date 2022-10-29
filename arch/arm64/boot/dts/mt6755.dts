@@ -30,7 +30,7 @@
 
 	/* chosen */
 	chosen: chosen {
-		bootargs = "console=tty0 console=ttyMT3,921600n1 vmalloc=496M \
+		bootargs = "console=tty0 console=ttyMT3,921600n1 vmalloc=400M \
 slub_max_order=0 slub_debug=OFZPU androidboot.hardware=mt6755 \
 firmware_class.path=/vendor/firmware loop.max_part=7";
 	};
@@ -288,21 +288,6 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			alloc-ranges = <0 0x40000000 0 0x60000000>;
 		};
 
-		ram_console-reserved-memory@44400000 {
-			compatible = "mediatek,ram_console";
-			reg = <0 0x44400000 0 0x10000>;
-		};
-
-		minirdump-reserved-memory@444f0000 {
-			compatible = "mediatek, minirdump";
-			reg = <0 0x444f0000 0 0x10000>;
-		};
-
-		pstore-reserved-memory@44410000 {
-			compatible = "mediatek,pstore";
-			reg = <0 0x44410000 0 0xe0000>;
-		};
-
 	};
 
 	gic: interrupt-controller@10230000 {
@@ -401,8 +386,8 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			#clock-cells = <1>;
 		};
 
-		infracfg_ao@10001000 {
-			compatible = "mediatek,infracfg_ao";
+		infracfg_ao: infracfg_ao@10001000 {
+			compatible = "mediatek,infracfg_ao", "syscon";
 			reg = <0x10001000 0x1000>;
 			interrupts = <GIC_SPI 136 IRQ_TYPE_EDGE_RISING>;
 		};
@@ -417,24 +402,6 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			compatible = "mediatek,mt6755-infrasys";
 			reg = <0x10001000 0x1000>;
 			#clock-cells = <1>;
-		};
-
-		btcvsd@10001000 {
-			compatible = "mediatek,audio_bt_cvsd";
-			offset =<0xf00 0x800 0xfd0 0xfd4 0xfd8>;
-			/*INFRA MISC, conn_bt_cvsd_mask, cvsd_mcu_read, write, packet_indicator*/
-			reg=<0x10001000 0x1000>, /*AUDIO_INFRA_BASE_PHYSICAL*/
-			      <0x18000000 0x10000>, /*PKV_PHYSICAL_BASE*/
-			      <0x18080000 0x8000>; /*SRAM_BANK2*/
-			interrupts = <GIC_SPI 236 IRQ_TYPE_LEVEL_LOW>;
-		};
-
-		mt_soc_btcvsd_rx_pcm@10001000 {
-			compatible = "mediatek,mt_soc_btcvsd_rx_pcm";
-		};
-
-		mt_soc_btcvsd_tx_pcm@10001000 {
-			compatible = "mediatek,mt_soc_btcvsd_tx_pcm";
 		};
 
 		iocfg_0@10002000 {
@@ -1281,6 +1248,7 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 			compatible = "mediatek,mt6755-audiosys";
 			reg = <0x11220000 0x10000>;
 			#clock-cells = <1>;
+			mediatek,btcvsd_snd = <&btcvsd_snd>;
 		};
 
 		audgpio: mt_soc_dl1_pcm@11220000 {
@@ -1336,6 +1304,17 @@ firmware_class.path=/vendor/firmware loop.max_part=7";
 				"apmixed_apll1_clk",
 				"apmixed_apll2_clk",
 				"top_clk26m_clk";
+		};
+
+		btcvsd_snd: mtk-btcvsd-snd@18000000 {
+			compatible = "mediatek,mtk-btcvsd-snd";
+			reg = <0x18000000 0x10000>, /*PKV_PHYSICAL_BASE*/
+			    <0x18080000 0x8000>; /*SRAM_BANK2*/
+			interrupts = <GIC_SPI 236 IRQ_TYPE_LEVEL_LOW>;
+			mediatek,infracfg = <&infracfg_ao>;
+			mediatek,offset =<0xf00 0x800 0xfd0 0xfd4 0xfd8>;
+			/*INFRA MISC, conn_bt_cvsd_mask*/
+			/*cvsd_mcu_read, write, packet_indicator*/
 		};
 
 		mt_soc_ul1_pcm@11220000 {

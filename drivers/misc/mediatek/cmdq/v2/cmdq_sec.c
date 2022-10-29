@@ -568,14 +568,16 @@ int32_t cmdq_sec_setup_context_session(cmdqSecContextHandle handle)
 	return status;
 }
 
-void cmdq_sec_handle_attach_status(struct TaskStruct *pTask, uint32_t iwcCommand,
+int32_t cmdq_sec_handle_attach_status(struct TaskStruct *pTask, uint32_t iwcCommand,
 	const iwcCmdqMessage_t *pIwc, int32_t sec_status_code, char **dispatch_mod_ptr)
 {
 	int index = 0;
 	const struct iwcCmdqSecStatus_t *secStatus = NULL;
 
-	if (!pIwc || !dispatch_mod_ptr)
-		return;
+	if (!pIwc || !dispatch_mod_ptr) {
+		CMDQ_ERR("NULL input for cmdq_sec_handle_attach_status...\n");
+		return 0;
+	}
 
 	/* assign status ptr to print without task */
 	secStatus = &pIwc->secStatus;
@@ -639,6 +641,14 @@ void cmdq_sec_handle_attach_status(struct TaskStruct *pTask, uint32_t iwcCommand
 			}
 			break;
 		}
+	}
+
+	/* This is for special case when call NWd to SWd, but SWd t-drv is not initialized.*/
+	if (!sec_status_code && secStatus->status == -CMDQ_ERR_DR_IPC_EXECUTE_SESSION) {
+		CMDQ_ERR("IWC status return error = %d...\n", secStatus->status);
+		return secStatus->status;
+	} else {
+		return 0;
 	}
 }
 
@@ -818,6 +828,7 @@ int32_t cmdq_sec_submit_to_secure_world_async_unlocked(uint32_t iwcCommand,
 	uint32_t msgOffset;
 	int32_t msgMAXSize;
 	char *dispatch_mod = "CMDQ";
+	int32_t iwcStatus = 0;
 
 	CMDQ_TIME tEntrySec;
 	CMDQ_TIME tExitSec;
@@ -857,7 +868,7 @@ int32_t cmdq_sec_submit_to_secure_world_async_unlocked(uint32_t iwcCommand,
 		cmdq_sec_track_task_record(iwcCommand, pTask, &tEntrySec, &tExitSec);
 
 		/* check status and attach secure error before session teardown */
-		cmdq_sec_handle_attach_status(pTask, iwcCommand, handle->iwcMessage, status, &dispatch_mod);
+		iwcStatus = cmdq_sec_handle_attach_status(pTask, iwcCommand, handle->iwcMessage, status, &dispatch_mod);
 
 		/* release resource */
 #if !(CMDQ_OPEN_SESSION_ONCE)
@@ -921,7 +932,14 @@ int32_t cmdq_sec_submit_to_secure_world_async_unlocked(uint32_t iwcCommand,
 			CMDQ_MSG("%s", longMsg);
 		}
 	}
+
+	/* This is for special case when call NWd to SWd, but SWd t-drv is not initialized.*/
+	if (!status && iwcStatus < 0) {
+		CMDQ_ERR("**Status = 0, but iwcStatus = %d, should checked further..\n", iwcStatus);
+		return iwcStatus;
+	} else {
 	return status;
+}
 }
 
 int32_t cmdq_sec_init_allocate_resource_thread(void *data)

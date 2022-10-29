@@ -22,6 +22,7 @@
 #define AAL_DRE_POINT_NUM   29
 
 #define AAL_SERVICE_FORCE_UPDATE 0x1
+#define aal_u32_handle_t unsigned long long
 
 enum AAL_ESS_UD_MODE {
 	CONFIG_BY_CUSTOM_LIB = 0,
@@ -52,6 +53,27 @@ typedef struct {
 	int dre_map_bypass;
 	/* ESS */
 	int cabc_gainlmt[33];
+	/* DRE 3.0 Reg. */
+	int dre_s_lower;
+	int dre_s_upper;
+	int dre_y_lower;
+	int dre_y_upper;
+	int dre_h_lower;
+	int dre_h_upper;
+	int dre_x_alpha_base;
+	int dre_x_alpha_shift_bit;
+	int dre_y_alpha_base;
+	int dre_y_alpha_shift_bit;
+	int act_win_x_end;
+	int dre_blk_x_num;
+	int dre_blk_y_num;
+	int dre_blk_height;
+	int dre_blk_width;
+	int dre_blk_area;
+	int dre_blk_area_min;
+	int hist_bin_type;
+	int dre_flat_length_slope;
+
 } DISP_AAL_INITREG;
 
 typedef struct {
@@ -60,12 +82,12 @@ typedef struct {
 	int colorHist;
 	unsigned int maxHist[AAL_HIST_BIN];
 	int requestPartial;
-#ifdef AAL_SUPPORT_KERNEL_API
+	aal_u32_handle_t dre30_hist;
 	unsigned int panel_type;
 	int essStrengthIndex;
 	int ess_enable;
 	int dre_enable;
-#endif
+	unsigned int yHist[AAL_HIST_BIN];
 
 } DISP_AAL_HIST;
 
@@ -81,6 +103,7 @@ typedef struct {
 	int FinalBacklight;	/* 10-bit ; [0,1023] */
 	int allowPartial;
 	int refreshLatency;	/* DISP_AAL_REFRESH_LATENCY */
+	aal_u32_handle_t dre30_gain;
 } DISP_AAL_PARAM;
 
 

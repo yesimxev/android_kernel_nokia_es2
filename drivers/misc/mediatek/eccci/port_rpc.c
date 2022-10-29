@@ -1342,6 +1342,10 @@ int port_rpc_recv_match(struct ccci_port *port, struct sk_buff *skb)
 			CCCI_DEBUG_LOG(md_id, KERN, "userspace rpc msg 0x%x on %s\n",
 						rpc_buf->op_id, port->name);
 			return 0;
+		case IPC_RPC_QUERY_AP_SYS_PROPERTY:
+			CCCI_DEBUG_LOG(md_id, KERN, "userspace rpc msg 0x%x on %s\n",
+						rpc_buf->op_id, port->name);
+			return 0;
 #endif
 		case IPC_RPC_QUERY_AP_SYS_PROPERTY:
 			CCCI_DEBUG_LOG(md_id, KERN, "userspace rpc msg 0x%x on %s\n",

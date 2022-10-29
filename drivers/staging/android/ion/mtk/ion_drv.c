@@ -56,6 +56,31 @@ EXPORT_SYMBOL(g_ion_device);
 
 #define __ION_CACHE_SYNC_USER_VA_EN__
 
+/* user va check
+ * @return 0 : invalid va
+ * @return 1 : valid user va
+ */
+int __ion_is_user_va(unsigned long va, size_t size)
+{
+	int ret = 0;
+	char data;
+
+	if (unlikely(!va || !size))
+		return 0;
+	if (va < TASK_SIZE) {
+		/* user space va check */
+		if (get_user(data, (char __user *)va) ||
+			get_user(data, (char __user *)(va + size - 1))) {
+			/* hole */
+			ret = 0;
+		} else {
+			ret = 1;
+		}
+	}
+
+	return ret;
+}
+
 static int __ion_cache_sync_kernel(unsigned long start, size_t size,
 		ION_CACHE_SYNC_TYPE sync_type) {
 	unsigned long end = start + size;
@@ -125,6 +150,8 @@ static DEFINE_MUTEX(gIon_cache_sync_user_lock);
 
 static long ion_sys_cache_sync(struct ion_client *client,
 		ion_sys_cache_sync_param_t *pParam, int from_kernel) {
+	int ret = 0;
+
 	ION_FUNC_ENTER;
 	if (pParam->sync_type < ION_CACHE_CLEAN_ALL) {
 		/* By range operation */
@@ -140,7 +167,11 @@ static long ion_sys_cache_sync(struct ion_client *client,
 		}
 
 #ifdef __ION_CACHE_SYNC_USER_VA_EN__
-		if (pParam->sync_type < ION_CACHE_CLEAN_BY_RANGE_USE_VA)
+		/*
+		 * if (sync_type < ION_CACHE_CLEAN_BY_RANGE_USE_PA)
+		 * work aroud for cache sync issue
+		 */
+		if (pParam->sync_type < ION_CACHE_CLEAN_ALL)
 #endif
 				{
 			struct ion_buffer *buffer;
@@ -148,9 +179,6 @@ static long ion_sys_cache_sync(struct ion_client *client,
 			int i, j;
 			struct sg_table *table = NULL;
 			int npages = 0;
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-			int ret = 0;
-#endif
 
 			mutex_lock(&client->lock);
 			/*if (!ion_handle_validate(client, kernel_handle)) {
@@ -163,23 +191,6 @@ static long ion_sys_cache_sync(struct ion_client *client,
 
 			table = buffer->sg_table;
 			npages = PAGE_ALIGN(buffer->size) / PAGE_SIZE;
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-			if ((pParam->sync_type == ION_CACHE_FLUSH_BY_RANGE)
-				|| (pParam->sync_type == ION_CACHE_FLUSH_BY_RANGE_USE_VA)) {
-				mutex_unlock(&client->lock);
-
-				if (!ion_sync_kernel_func)
-					ion_sync_kernel_func = &__ion_cache_sync_kernel;
-
-				ret = mt_smp_cache_flush(table, pParam->sync_type, npages);
-				if (ret < 0) {
-					pr_emerg("[smp cache flush] error in smp_sync_sg_list\n");
-					return -EFAULT;
-				}
-
-				return ret;
-			} else {
-#endif
 			mutex_lock(&gIon_cache_sync_user_lock);
 
 			if (!cache_map_vm_struct) {
@@ -191,7 +202,8 @@ static long ion_sys_cache_sync(struct ion_client *client,
 				IONMSG("error: cache_map_vm_struct is NULL, no vmalloc area\n");
 				mutex_unlock(&gIon_cache_sync_user_lock);
 				mutex_unlock(&client->lock);
-				return -ENOMEM;
+				ret = -ENOMEM;
+				goto out;
 			}
 
 			for_each_sg(table->sgl, sg, table->nents, i) {
@@ -206,7 +218,8 @@ static long ion_sys_cache_sync(struct ion_client *client,
 						IONMSG("cannot do cache sync: ret=%lu\n", start);
 						mutex_unlock(&gIon_cache_sync_user_lock);
 						mutex_unlock(&client->lock);
-						return -EFAULT;
+						ret = -EFAULT;
+						goto out;
 					}
 
 					__ion_cache_sync_kernel(start, PAGE_SIZE, pParam->sync_type);
@@ -217,10 +230,13 @@ static long ion_sys_cache_sync(struct ion_client *client,
 
 			mutex_unlock(&gIon_cache_sync_user_lock);
 			mutex_unlock(&client->lock);
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-			}
-#endif
 		} else {
+			if (!from_kernel) {
+				IONMSG("cache sync from user, sync type:0x%x\n",
+				       pParam->sync_type);
+				ret = -EFAULT;
+				goto out;
+			}
 			start = (unsigned long) pParam->va;
 			size = pParam->size;
 
@@ -234,7 +250,7 @@ static long ion_sys_cache_sync(struct ion_client *client,
 			}
 		}
 
-
+out:
 		ion_drv_put_kernel_handle(kernel_handle);
 	} else {
 		/* All cache operation */
@@ -260,7 +276,7 @@ static long ion_sys_cache_sync(struct ion_client *client,
 		}
 	}
 	ION_FUNC_LEAVE;
-	return 0;
+	return ret;
 }
 
 int ion_sys_copy_client_name(const char *src, char *dst)
@@ -273,171 +289,6 @@ int ion_sys_copy_client_name(const char *src, char *dst)
 	dst[ION_MM_DBG_NAME_LEN - 1] = '\0';
 
 	return 0;
-}
-
-static int ion_cache_sync_flush(unsigned long start, size_t size,
-		ION_DMA_TYPE dma_type) {
-	MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_FLUSH_RANGE],
-			MMProfileFlagStart, size, 0);
-	dmac_flush_range((void *) start, (void *) (start + size - 1));
-	MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_FLUSH_RANGE], MMProfileFlagEnd, size, 0);
-
-	return 0;
-}
-
-long ion_dma_op(struct ion_client *client, ion_sys_dma_param_t *pParam, int from_kernel)
-{
-	struct ion_buffer *buffer;
-	struct scatterlist *sg;
-	int i, j;
-	struct sg_table *table = NULL;
-	int npages = 0;
-	unsigned long start = -1;
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-	int ret = 0;
-#endif
-
-	struct ion_handle *kernel_handle;
-
-	kernel_handle = ion_drv_get_handle(client, pParam->handle,
-					   pParam->kernel_handle, from_kernel);
-	if (IS_ERR(kernel_handle)) {
-		pr_err("ion cache sync fail!\n");
-		return -EINVAL;
-	}
-
-	mutex_lock(&client->lock);
-	buffer = kernel_handle->buffer;
-
-	table = buffer->sg_table;
-	npages = PAGE_ALIGN(buffer->size) / PAGE_SIZE;
-
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-	if ((pParam->dma_type == ION_DMA_FLUSH_BY_RANGE)
-		|| (pParam->dma_type == ION_DMA_FLUSH_BY_RANGE_USE_VA)) {
-		mutex_unlock(&client->lock);
-
-		if (!ion_sync_kernel_func)
-			ion_sync_kernel_func = &ion_cache_sync_flush;
-
-		ret = mt_smp_cache_flush(table, pParam->dma_type, npages);
-		if (ret < 0) {
-			pr_emerg("[smp cache flush] error in smp_sync_sg_list\n");
-			return -EFAULT;
-		}
-
-		return ret;
-	} else {
-#endif
-	mutex_lock(&gIon_cache_sync_user_lock);
-
-	if (!cache_map_vm_struct) {
-		IONMSG(" error: cache_map_vm_struct is NULL, retry\n");
-		ion_cache_sync_init();
-	}
-
-	if (!cache_map_vm_struct) {
-		IONMSG("error: cache_map_vm_struct is NULL, no vmalloc area\n");
-		mutex_unlock(&gIon_cache_sync_user_lock);
-		mutex_unlock(&client->lock);
-		return -ENOMEM;
-	}
-
-	for_each_sg(table->sgl, sg, table->nents, i) {
-		int npages_this_entry = PAGE_ALIGN(sg->length) / PAGE_SIZE;
-		struct page *page = sg_page(sg);
-
-		BUG_ON(i >= npages);
-		for (j = 0; j < npages_this_entry; j++) {
-			start = (unsigned long)ion_cache_map_page_va(page++);
-
-			if (IS_ERR_OR_NULL((void *)start)) {
-				IONMSG("cannot do cache sync: ret=%lu\n", start);
-				mutex_unlock(&gIon_cache_sync_user_lock);
-				mutex_unlock(&client->lock);
-				return -EFAULT;
-			}
-
-			if (pParam->dma_type == ION_DMA_MAP_AREA)
-				ion_dma_map_area_va((void *)start, PAGE_SIZE, pParam->dma_dir);
-			else if (pParam->dma_type == ION_DMA_UNMAP_AREA)
-				ion_dma_unmap_area_va((void *)start, PAGE_SIZE, pParam->dma_dir);
-			else if (pParam->dma_type == ION_DMA_FLUSH_BY_RANGE)
-				ion_cache_sync_flush(start, PAGE_SIZE, ION_DMA_FLUSH_BY_RANGE);
-
-			ion_cache_unmap_page_va(start);
-		}
-	}
-
-	mutex_unlock(&gIon_cache_sync_user_lock);
-	mutex_unlock(&client->lock);
-
-	ion_drv_put_kernel_handle(kernel_handle);
-
-#ifdef CONFIG_MTK_CACHE_FLUSH_RANGE_PARALLEL
-	}
-#endif
-	return 0;
-}
-
-void ion_dma_map_area_va(void *start, size_t size, ION_DMA_DIR dir)
-{
-	if (dir == ION_DMA_FROM_DEVICE)
-		dmac_map_area(start, size, DMA_FROM_DEVICE);
-	else if (dir == ION_DMA_TO_DEVICE)
-		dmac_map_area(start, size, DMA_TO_DEVICE);
-	else if (dir == ION_DMA_BIDIRECTIONAL)
-		dmac_map_area(start, size, DMA_BIDIRECTIONAL);
-}
-
-void ion_dma_unmap_area_va(void *start, size_t size, ION_DMA_DIR dir)
-{
-	if (dir == ION_DMA_FROM_DEVICE)
-		dmac_unmap_area(start, size, DMA_FROM_DEVICE);
-	else if (dir == ION_DMA_TO_DEVICE)
-		dmac_unmap_area(start, size, DMA_TO_DEVICE);
-	else if (dir == ION_DMA_BIDIRECTIONAL)
-		dmac_unmap_area(start, size, DMA_BIDIRECTIONAL);
-}
-
-void ion_cache_flush_all(void)
-{
-	MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_FLUSH_ALL], MMProfileFlagStart, 1, 1);
-	/* IONMSG("[ion_cache_flush_all]: ION cache flush all.\n"); */
-	smp_inner_dcache_flush_all();
-	/* outer_clean_all(); */
-	MMProfileLogEx(ION_MMP_Events[PROFILE_DMA_FLUSH_ALL], MMProfileFlagEnd, 1, 1);
-}
-
-static long ion_sys_dma_op(struct ion_client *client, ion_sys_dma_param_t *pParam, int from_kernel)
-{
-	long ret = 0;
-
-	switch (pParam->dma_type) {
-	case ION_DMA_MAP_AREA:
-	case ION_DMA_UNMAP_AREA:
-	case ION_DMA_FLUSH_BY_RANGE:
-		ion_dma_op(client, pParam, from_kernel);
-		break;
-	case ION_DMA_MAP_AREA_VA:
-		ion_dma_map_area_va(pParam->va, (size_t) pParam->size, pParam->dma_dir);
-		break;
-	case ION_DMA_UNMAP_AREA_VA:
-		ion_dma_unmap_area_va(pParam->va, (size_t) pParam->size, pParam->dma_dir);
-		break;
-	case ION_DMA_CACHE_FLUSH_ALL:
-		ion_cache_flush_all();
-		break;
-	case ION_DMA_FLUSH_BY_RANGE_USE_VA:
-		ion_cache_sync_flush((unsigned long)pParam->va, (size_t) pParam->size,
-					ION_DMA_FLUSH_BY_RANGE_USE_VA);
-		break;
-	default:
-		IONMSG("[ion_dbg][ion_sys_dma_op]: Error. Invalid command.\n");
-		ret = -EFAULT;
-		break;
-	}
-	return ret;
 }
 
 static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd,
@@ -479,14 +330,8 @@ static long ion_sys_ioctl(struct ion_client *client, unsigned int cmd,
 		ion_drv_put_kernel_handle(kernel_handle);
 	}
 	break;
-	case ION_SYS_GET_CLIENT:
-		Param.get_client_param.client = (unsigned long) client;
-		break;
 	case ION_SYS_SET_CLIENT_NAME:
 		ion_sys_copy_client_name(Param.client_name_param.name, client->dbg_name);
-		break;
-	case ION_SYS_DMA_OP:
-		ion_sys_dma_op(client, &Param.dma_param, from_kernel);
 		break;
 	case ION_SYS_SET_HANDLE_BACKTRACE:
 		IONMSG("[ion_dbg][ion_sys_ioctl]: Error. ION_SYS_SET_HANDLE_BACKTRACE not support.\n");
@@ -793,15 +638,6 @@ static struct ion_platform_heap ion_drv_platform_heaps[] = {
 				.type = ION_HEAP_TYPE_MULTIMEDIA,
 				.id = ION_HEAP_TYPE_MULTIMEDIA_FOR_CAMERA,
 				.name = "ion_mm_heap_for_camera",
-				.base = 0,
-				.size = 0,
-				.align = 0,
-				.priv = NULL,
-		},
-		{
-				.type = ION_HEAP_TYPE_MULTIMEDIA,
-				.id = ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA,
-				.name = "ion_mm_heap_map_mva",
 				.base = 0,
 				.size = 0,
 				.align = 0,

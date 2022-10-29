@@ -196,13 +196,6 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap,
 	   memory coming from the heaps is ready for dma, ie if it has a
 	   cached mapping that mapping has been invalidated */
 	for_each_sg(buffer->sg_table->sgl, sg, buffer->sg_table->nents, i) {
-		if ((heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA) && (align < PAGE_OFFSET)) {
-			if (align < VMALLOC_START || align > VMALLOC_END) {
-				/*userspace va without vmalloc, has no page struct*/
-				sg->length = sg_dma_len(sg);
-				continue;
-			}
-		}
 		sg_dma_address(sg) = sg_phys(sg);
 		#ifdef CONFIG_NEED_SG_DMA_LENGTH
 		sg->dma_length = sg->length;
@@ -346,6 +339,16 @@ static void ion_handle_get(struct ion_handle *handle)
 	kref_get(&handle->ref);
 }
 
+/* Must hold the client lock */
+static struct ion_handle *ion_handle_get_check_overflow(
+				struct ion_handle *handle)
+{
+	if (atomic_read(&handle->ref.refcount) + 1 == 0)
+		return ERR_PTR(-EOVERFLOW);
+	ion_handle_get(handle);
+	return handle;
+}
+
 static int ion_handle_put_nolock(struct ion_handle *handle)
 {
 	int ret;
@@ -436,7 +439,7 @@ static struct ion_handle *ion_handle_get_by_id_nolock(struct ion_client *client,
 
 	handle = idr_find(&client->idr, id);
 	if (handle)
-		ion_handle_get(handle);
+		ion_handle_get_check_overflow(handle);
 
 	return handle ? handle : ERR_PTR(-EINVAL);
 }
@@ -503,17 +506,25 @@ struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 	struct ion_heap *heap;
 	int ret;
 	unsigned long long start, end;
+	unsigned int heap_mask = ~0;
 
 	pr_debug("%s: len %zu align %zu heap_id_mask %u flags %x\n", __func__,
 		 len, align, heap_id_mask, flags);
+	/* For some case(C2 audio decoder), it can not set heap id in AOSP,
+	 * so mtk ion will set this heap to ion_mm_heap.
+	 */
+	if (heap_id_mask == heap_mask) {
+		IONMSG("ION redirect heap_id_mask[0x%x] to MULTIMEDIA[0x%x]",
+			heap_id_mask, ION_HEAP_MULTIMEDIA_MASK);
+		heap_id_mask = ION_HEAP_MULTIMEDIA_MASK;
+	}
 	/*
 	 * traverse the list of heaps available in this system in priority
 	 * order.  If the heap type is supported by the client, and matches the
 	 * request of the caller allocate from it.  Repeat until allocate has
 	 * succeeded or all heaps have been tried
 	 */
-	if (heap_id_mask != ION_HEAP_MAP_MVA_MASK)
-		len = PAGE_ALIGN(len);
+	len = PAGE_ALIGN(len);
 
 	if (!len) {
 		IONMSG("%s len cannot be zero.\n", __func__);
@@ -564,7 +575,7 @@ struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 
 	mutex_lock(&client->lock);
 	if (grab_handle)
-		ion_handle_get(handle);
+		ion_handle_get_check_overflow(handle);
 	ret = ion_handle_add(client, handle);
 	mutex_unlock(&client->lock);
 	if (ret) {
@@ -1350,7 +1361,7 @@ struct ion_handle *ion_import_dma_buf(struct ion_client *client, int fd)
 	/* if a handle exists for this buffer just take a reference to it */
 	handle = ion_handle_lookup(client, buffer);
 	if (!IS_ERR(handle)) {
-		ion_handle_get(handle);
+		ion_handle_get_check_overflow(handle);
 		mutex_unlock(&client->lock);
 		goto end;
 	}
@@ -1375,9 +1386,11 @@ end:
 	dma_buf_put(dmabuf);
 
 	MMProfileLogEx(ION_MMP_Events[PROFILE_IMPORT], MMProfileFlagEnd, 1, 1);
-	handle->dbg.fd = fd;
-	handle->dbg.user_ts = sched_clock();
-	do_div(handle->dbg.user_ts, 1000000);
+	if (!IS_ERR(handle)) {
+		handle->dbg.fd = fd;
+		handle->dbg.user_ts = sched_clock();
+		do_div(handle->dbg.user_ts, 1000000);
+	}
 	return handle;
 }
 EXPORT_SYMBOL(ion_import_dma_buf);
@@ -1402,12 +1415,13 @@ static int ion_sync_for_device(struct ion_client *client, int fd)
 	}
 	buffer = dmabuf->priv;
 
-	if (buffer->heap->type != (int)ION_HEAP_TYPE_FB)
+	if (buffer->heap->type != (int)ION_HEAP_TYPE_FB &&
+	    buffer->heap->type != (int)ION_HEAP_TYPE_MULTIMEDIA_SEC)
 		dma_sync_sg_for_device(NULL, buffer->sg_table->sgl,
 			buffer->sg_table->nents, DMA_BIDIRECTIONAL);
 	else
-		pr_err("%s: can not sync support heap type(%d) to sync\n",
-		       __func__, buffer->heap->type);
+		IONMSG("%s: can not support heap %s type %d to sync\n",
+		       __func__, buffer->heap->name, buffer->heap->type);
 
 	dma_buf_put(dmabuf);
 	return 0;
@@ -1618,8 +1632,7 @@ static size_t ion_debug_heap_total(struct ion_client *client,
 						     node);
 		if ((handle->buffer->heap->id == id)
 			|| ((id == ION_HEAP_TYPE_MULTIMEDIA)
-			&& ((handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_FOR_CAMERA) ||
-				(handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA))))
+			&& ((handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_FOR_CAMERA))))
 			size += handle->buffer->size;
 	}
 	mutex_unlock(&client->lock);

@@ -71,9 +71,6 @@ static m4u_buf_info_t gMvaNode_unknown = {
 	.port = M4U_PORT_UNKNOWN,
 };
 
-
-
-
 /* -------------------------------------Global variables------------------------------------------------// */
 #ifdef M4U_PROFILE
 MMP_Event M4U_MMP_Events[M4U_MMP_MAX];
@@ -524,9 +521,14 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 	phys_addr_t pa;
 	struct scatterlist *sg;
 	struct page *page;
+	unsigned long va_align_end;
 
 	page_num = M4U_GET_PAGE_NUM(va, size);
 	va_align = round_down(va, PAGE_SIZE);
+	va_align_end = va_align + page_num * PAGE_SIZE;
+
+	if (va_align_end <= va_align)
+		goto err_out;
 
 	table = kmalloc(sizeof(struct sg_table), GFP_KERNEL);
 	if (!table) {
@@ -546,8 +548,9 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 	M4ULOG_LOW("%s va=0x%lx, PAGE_OFFSET=0x%lx, VMALLOC_START=0x%lx, VMALLOC_END=0x%lx\n",
 		   __func__, va, PAGE_OFFSET, VMALLOC_START, VMALLOC_END);
 
-	if (va < PAGE_OFFSET) {	/* from user space */
-		if (va >= VMALLOC_START && va <= VMALLOC_END) {	/* vmalloc */
+	if (va_align_end <= PAGE_OFFSET) {	/* from user space */
+		if (va_align >= VMALLOC_START && va_align_end <= VMALLOC_END) {
+			/* vmalloc */
 			M4ULOG_MID(" from user space vmalloc, va = 0x%lx", va);
 			for_each_sg(table->sgl, sg, table->nents, i) {
 				page = vmalloc_to_page((void *)(va_align + i * PAGE_SIZE));
@@ -558,6 +561,11 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 				}
 				sg_set_page(sg, page, PAGE_SIZE, 0);
 			}
+		} else if ((va_align >= VMALLOC_START &&
+				va_align_end > VMALLOC_END) ||
+			(va_align < VMALLOC_START &&
+				va_align_end >= VMALLOC_START)) {
+			goto err;
 		} else {
 			ret = m4u_create_sgtable_user(va_align, table);
 			if (ret) {
@@ -565,8 +573,12 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 				goto err;
 			}
 		}
-	} else {		/* from kernel space */
-		if (va >= VMALLOC_START && va <= VMALLOC_END) {	/* vmalloc */
+	} else {
+		if (va_align < PAGE_OFFSET)
+			goto err;
+		/* from kernel space */
+		if (va_align >= VMALLOC_START && va_align_end <= VMALLOC_END) {
+			/* vmalloc */
 			M4ULOG_MID(" from kernel space vmalloc, va = 0x%lx", va);
 			for_each_sg(table->sgl, sg, table->nents, i) {
 				page = vmalloc_to_page((void *)(va_align + i * PAGE_SIZE));
@@ -577,7 +589,13 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 				}
 				sg_set_page(sg, page, PAGE_SIZE, 0);
 			}
-		} else {	/* kmalloc to-do: use one entry sgtable. */
+		} else if ((va_align >= VMALLOC_START &&
+				va_align_end > VMALLOC_END) ||
+			(va_align < VMALLOC_START &&
+				va_align_end >= VMALLOC_START)) {
+			goto err;
+		} else {
+		/* kmalloc to-do: use one entry sgtable. */
 			for_each_sg(table->sgl, sg, table->nents, i) {
 				pa = virt_to_phys((void *)(va_align + i * PAGE_SIZE));
 				page = phys_to_page(pa);
@@ -589,8 +607,10 @@ struct sg_table *m4u_create_sgtable(unsigned long va, unsigned int size)
 	return table;
 
 err:
+	M4UMSG("%s error va=0x%lx, size=%d\n", __func__, va, size);
 	sg_free_table(table);
 	kfree(table);
+err_out:
 	return ERR_PTR(-EFAULT);
 }
 
@@ -1532,16 +1552,20 @@ static int __m4u_sec_init(void)
 	void *pgd_va;
 	unsigned long pt_pa_nonsec;
 	unsigned int size;
-
+#ifdef CONFIG_ARCH_MT6755
+	unsigned int i = 0;
+#endif
 	mutex_lock(&m4u_tci_mutex);
 	if (NULL == m4u_tci_msg) {
 		M4UMSG("%s TCI/DCI error\n", __func__);
 		ret = MC_DRV_ERR_NO_FREE_MEMORY;
 		goto out;
 	}
-
 	m4u_get_pgd(NULL, 0, &pgd_va, (void *)&pt_pa_nonsec, &size);
-
+#ifdef CONFIG_ARCH_MT6755
+	for (i = 0; i < SMI_LARB_NR; i++)
+		larb_clock_on(i);
+#endif
 	m4u_tci_msg->cmd = CMD_M4UTL_INIT;
 	m4u_tci_msg->init_param.nonsec_pt_pa = pt_pa_nonsec;
 	m4u_tci_msg->init_param.l2_en = gM4U_L2_enable;
@@ -1554,7 +1578,10 @@ static int __m4u_sec_init(void)
 		ret = -1;
 		goto out;
 	}
-
+#ifdef CONFIG_ARCH_MT6755
+	for (i = 0; i < SMI_LARB_NR; i++)
+		larb_clock_off(i);
+#endif
 	ret = m4u_tci_msg->rsp;
 out:
 	mutex_unlock(&m4u_tci_mutex);

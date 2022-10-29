@@ -1054,14 +1054,14 @@ static int decide_ttj(void)
 		if (ctm_on == 1) {
 			TARGET_TJ =
 				MIN(MAX_TARGET_TJ,
-				MAX(STEADY_TARGET_TJ, (COEF_AE - COEF_BE * curr_tpcb / 1000)));
+				MAX(STEADY_TARGET_TJ, (COEF_AE - COEF_BE * (curr_tpcb / 1000))));
 		} else if (ctm_on == 2) {
 			/* +++ cATM+ +++ */
 				TARGET_TJ = ta_get_ttj();
 			/* --- cATM+ --- */
 		}
 		current_ETJ =
-		    MIN(MAX_EXIT_TJ, MAX(STEADY_EXIT_TJ, (COEF_AX - COEF_BX * curr_tpcb / 1000)));
+		    MIN(MAX_EXIT_TJ, MAX(STEADY_EXIT_TJ, (COEF_AX - COEF_BX * (curr_tpcb / 1000))));
 		/* tscpu_printk("cttj %d cetj %d tpcb %d\n", TARGET_TJ, current_ETJ, curr_tpcb); */
 	}
 #endif

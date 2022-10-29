@@ -381,6 +381,11 @@ extern char __sched_text_start[], __sched_text_end[];
 extern int in_sched_functions(unsigned long addr);
 
 #define	MAX_SCHEDULE_TIMEOUT	LONG_MAX
+
+#ifdef CONFIG_DEBUG_PREEMPT
+#define PREEMPT_DISABLE_DEEPTH 5
+#endif
+
 extern signed long schedule_timeout(signed long timeout);
 extern signed long schedule_timeout_interruptible(signed long timeout);
 extern signed long schedule_timeout_killable(signed long timeout);
@@ -1703,6 +1708,7 @@ struct task_struct {
 #endif
 #ifdef CONFIG_DEBUG_PREEMPT
 	unsigned long preempt_disable_ip;
+	unsigned long preempt_disable_ips[PREEMPT_DISABLE_DEEPTH];
 #endif
 #ifdef CONFIG_NUMA
 	struct mempolicy *mempolicy;	/* Protected by alloc_lock */

@@ -772,7 +772,7 @@ static ssize_t mt_sched_monitor_write(struct file *filp, const char *ubuf,
 				      size_t cnt, loff_t *data)
 {
 	char buf[64];
-	unsigned long val;
+	unsigned long val = 0;
 	int ret;
 
 	if (!sched_mon_door_key)
@@ -819,7 +819,7 @@ static ssize_t mt_sched_monitor_##param##_write(			\
 	size_t cnt, loff_t *data)				\
 {											\
 	char buf[64];							\
-	unsigned long val;								\
+	unsigned long val = 0;								\
 	int ret;								\
 											\
 	if (!sched_mon_door_key)			\

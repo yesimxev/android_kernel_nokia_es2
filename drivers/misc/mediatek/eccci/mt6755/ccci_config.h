@@ -17,6 +17,10 @@
 /*Bool option part*/
 /*================================================*/
 /*#define CCCI_STATISTIC*/
+
+/* platform info */
+#define MD_GENERATION       (6291)
+
 #define FEATURE_GET_MD_GPIO_NUM
 #define FEATURE_GET_MD_GPIO_VAL
 #define FEATURE_GET_MD_ADC_NUM

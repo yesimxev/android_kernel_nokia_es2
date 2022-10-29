@@ -45,7 +45,7 @@ static struct ccci_port md1_ccci_ports[] = {
 	{CCCI_PCM_TX, CCCI_PCM_RX, 0, 0, 0xFF, 0xFF, 4, &char_port_ops, 1, "ccci_aud",},
 	{CCCI_UART1_TX, CCCI_UART1_RX, 1, 1, 3, 3, 0, &char_port_ops, 2, "ccci_md_log_ctrl",},
 	{CCCI_UART2_TX, CCCI_UART2_RX, 1, 1, 0xFF, 0xFF, 0, &char_port_ops, 3, "ttyC0",},
-	{CCCI_FS_TX, CCCI_FS_RX, 1, 1, 1, 1, 4, &char_port_ops, 4, "ccci_fs",},
+	{CCCI_FS_TX, CCCI_FS_RX, 1, 1, 1, 1, 4 | PORT_F_CLEAN, &char_port_ops, 4, "ccci_fs",},
 	{CCCI_IPC_UART_TX, CCCI_IPC_UART_RX, 1, 1, 0xFF, 0xFF, 0, &char_port_ops, 5, "ttyC2",},
 	{CCCI_ICUSB_TX, CCCI_ICUSB_RX, 1, 1, 0xFF, 0xFF, 0, &char_port_ops, 6, "ttyC3",},
 	{CCCI_MD_LOG_TX, CCCI_MD_LOG_RX, 2, 2, 2, 2, 8, &char_port_ops, 7, "ttyC1",},
@@ -150,7 +150,7 @@ static struct ccci_port md3_ccci_ports[] = {
 	{CCCI_MONITOR_CH, CCCI_MONITOR_CH, 0xFF, 0xFF, 0xFF, 0xFF, 4, &char_port_ops, 0, "ccci3_monitor",},
 	{CCCI_PCM_TX, CCCI_PCM_RX, C2K_PCM_TX_Q, C2K_PCM_RX_Q, 0xFF, 0xFF, 0, &char_port_ops, 1, "ccci3_aud",},
 	{CCCI_UART1_TX, CCCI_UART1_RX, 0, 0, 0, 0, 0, &char_port_ops, 2, "ccci3_md_log_ctrl",},
-	{CCCI_FS_TX, CCCI_FS_RX, 4, 4, 4, 4, 4, &char_port_ops, 4, "ccci3_fs",},
+	{CCCI_FS_TX, CCCI_FS_RX, 4, 4, 4, 4, 4 | PORT_F_CLEAN, &char_port_ops, 4, "ccci3_fs",},
 	{CCCI_IPC_UART_TX, CCCI_IPC_UART_RX, 6, 6, 0xFF, 0xFF, 0, &char_port_ops, 5, "ccci3_tty2",},	/*for agps */
 	{CCCI_MD_LOG_TX, CCCI_MD_LOG_RX, C2K_MD_LOG_TX_Q, C2K_MD_LOG_RX_Q, C2K_MD_LOG_TX_Q, C2K_MD_LOG_RX_Q,
 		0, &char_port_ops, 7, "ccci3_tty1",},

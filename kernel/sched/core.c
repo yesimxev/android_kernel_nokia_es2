@@ -3011,7 +3011,27 @@ void preempt_dump_backtrace(int type)
 })
 
 #endif
+inline void record_preempt_disable_ips(struct task_struct *tsk)
+{
+#ifdef CONFIG_DEBUG_PREEMPT
+	int i = 0;
+	unsigned long *addrs = tsk->preempt_disable_ips;
 
+	for (i = 0; i < PREEMPT_DISABLE_DEEPTH; i++)
+		addrs[i] = (unsigned long) ftrace_return_address(i);
+#endif
+}
+
+inline void dump_preempt_disable_ips(struct task_struct *tsk)
+{
+#ifdef CONFIG_DEBUG_PREEMPT
+	unsigned long *addrs = tsk->preempt_disable_ips;
+	int i = 0;
+
+	for (i = 0; i < PREEMPT_DISABLE_DEEPTH; i++)
+		print_ip_sym(addrs[i]);
+#endif
+}
 void preempt_count_add(int val)
 {
 #ifdef CONFIG_DEBUG_PREEMPT
@@ -3037,6 +3057,7 @@ void preempt_count_add(int val)
 		unsigned long ip = get_parent_ip(CALLER_ADDR1);
 #ifdef CONFIG_DEBUG_PREEMPT
 		current->preempt_disable_ip = ip;
+		record_preempt_disable_ips(current);
 #endif
 		trace_preempt_off(CALLER_ADDR0, ip);
 #ifdef CONFIG_MTPROF
@@ -3118,6 +3139,7 @@ static noinline void __schedule_bug(struct task_struct *prev)
 	if (in_atomic_preempt_off()) {
 		pr_err("Preemption disabled at:");
 		print_ip_sym(current->preempt_disable_ip);
+		dump_preempt_disable_ips(current);
 		pr_cont("\n");
 	}
 #endif
@@ -7643,6 +7665,7 @@ void __might_sleep(const char *file, int line, int preempt_offset)
 	if (!preempt_count_equals(preempt_offset)) {
 		pr_err("Preemption disabled at:");
 		print_ip_sym(current->preempt_disable_ip);
+		dump_preempt_disable_ips(current);
 		pr_cont("\n");
 	}
 #endif

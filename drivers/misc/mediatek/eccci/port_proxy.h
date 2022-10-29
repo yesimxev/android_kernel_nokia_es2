@@ -26,6 +26,10 @@
 
 #define PORT_F_TX_DATA_FULLED	(1<<1)	/* reused for net tx, Data queue, same bit as RX_FULLED */
 #define PORT_F_TX_ACK_FULLED	(1<<8)
+
+/*Can be clean when MD is invalid*/
+#define PORT_F_CLEAN            (1<<9)
+
 enum {
 	PORT_DBG_DUMP_RILD = 0,
 	PORT_DBG_DUMP_AUDIO,
@@ -175,6 +179,10 @@ void port_proxy_md_hs2_msg_notify(struct port_proxy *proxy_p, struct sk_buff *sk
 void *port_proxy_get_mdee(struct port_proxy *proxy_p);
 unsigned int port_proxy_get_poll_seq_num(struct port_proxy *proxy_p);
 int port_proxy_check_critical_user(struct port_proxy *proxy_p);
+int force_md_stop(struct ccci_modem *md);
+
+void set_mdinit_killed(int killed);
+int get_mdinit_killed(void);
 
 #ifdef FEATURE_SCP_CCCI_SUPPORT
 int port_proxy_ccism_shm_init_ack_hdlr(struct port_proxy *proxy_p, unsigned int data);

@@ -399,7 +399,7 @@ static long cam_cal_drv_compat_ioctl(struct file *filp, unsigned int cmd, unsign
 	case COMPAT_CAM_CALIOC_G_READ: {
 		data32 = compat_ptr(arg);
 		data = compat_alloc_user_space(sizeof(*data));
-		if (data == NULL)
+		if (data == NULL || data32 == NULL)
 			return -EFAULT;
 
 		err = cam_cal_compat_get_info(data32, data);
@@ -419,7 +419,7 @@ static long cam_cal_drv_compat_ioctl(struct file *filp, unsigned int cmd, unsign
 	case COMPAT_CAM_CALIOC_S_WRITE: {/*Note: Write Command is Unverified!*/
 		data32 = compat_ptr(arg);
 		data = compat_alloc_user_space(sizeof(*data));
-		if (data == NULL)
+		if (data == NULL || data32 == NULL)
 			return -EFAULT;
 
 		err = cam_cal_compat_get_info(data32, data);

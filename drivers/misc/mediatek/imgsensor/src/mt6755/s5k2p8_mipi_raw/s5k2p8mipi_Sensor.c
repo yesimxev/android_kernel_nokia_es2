@@ -537,7 +537,7 @@ static kal_uint16 S5K2P8MIPI_table_write_cmos_sensor_burst(kal_uint16* para, kal
 
 static void set_dummy(void)
 {
-	LOG_INF("dummyline = %d, dummypixels = %d ", imgsensor.dummy_line, imgsensor.dummy_pixel);
+	/*LOG_INF("dummyline = %d, dummypixels = %d ", imgsensor.dummy_line, imgsensor.dummy_pixel);*/
     write_cmos_sensor_8(0x0104, 0x01);
     write_cmos_sensor(0x0340, imgsensor.frame_length);
     write_cmos_sensor(0x0342, imgsensor.line_length);

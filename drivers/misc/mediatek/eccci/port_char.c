@@ -60,7 +60,7 @@ static int dev_char_close(struct inode *inode, struct file *file)
 	struct sk_buff *skb = NULL;
 	unsigned long flags;
 	struct ccci_port *status_poller;
-	int clear_cnt = 0;
+	int clear_cnt = 0, ret;
 
 	/* 0. decrease usage count, so when we ask more, the packet can be dropped in recv_request */
 	atomic_dec(&port->usage_cnt);
@@ -78,6 +78,13 @@ static int dev_char_close(struct inode *inode, struct file *file)
 		     port->rx_skb_list.qlen, skb_queue_empty(&port->rx_skb_list), clear_cnt, port->rx_drop_cnt);
 	ccci_event_log("md%d: port %s close rx_len=%d empty=%d, clear_cnt=%d, drop=%d\n", port->md_id, port->name,
 		     port->rx_skb_list.qlen, skb_queue_empty(&port->rx_skb_list), clear_cnt, port->rx_drop_cnt);
+	if (!strcmp(port->name, "ccci_monitor") ||
+		!strcmp(port->name, "ccci3_monitor")) {
+		set_mdinit_killed(1);
+		ret = force_md_stop(port->modem);
+		if (ret)
+			CCCI_NORMAL_LOG(port->md_id, CHAR, "force stop MD fail\n");
+	}
 #ifdef FEATURE_POLL_MD_EN
 	if (port->rx_ch == CCCI_MD_LOG_RX && port_proxy_get_md_state(port->port_proxy) == READY) {
 		status_poller = port_proxy_get_port_by_channel(port->port_proxy, CCCI_STATUS_RX);

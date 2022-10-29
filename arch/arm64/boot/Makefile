@@ -28,7 +28,7 @@ DTB_LIST := $(dtb-y)
 endif
 DTB_OBJS := $(addprefix $(obj)/dts/,$(DTB_LIST))
 
-$(obj)/Image: vmlinux FORCE
+$(obj)/Image: vmlinux $(obj)/mtk.dtb FORCE
 	$(call if_changed,objcopy)
 
 $(obj)/Image-dtb: $(obj)/Image $(DTB_OBJS) FORCE
@@ -38,6 +38,9 @@ $(obj)/Image.gz: $(obj)/Image FORCE
 	$(call if_changed,gzip)
 
 $(obj)/Image.gz-dtb: $(obj)/Image.gz $(DTB_OBJS) FORCE
+	$(call if_changed,cat)
+
+$(obj)/mtk.dtb: $(DTB_OBJS) FORCE
 	$(call if_changed,cat)
 
 install: $(obj)/Image

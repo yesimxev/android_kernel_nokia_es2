@@ -40,10 +40,12 @@
 #if defined(ENABLE_32K_CLK_LESS)
 #include <mt-plat/mtk_rtc.h>
 #endif
+#include "ccci_modem.h"
 
 #define TAG "md"
 
 static LIST_HEAD(modem_list);	/* don't use array, due to MD index may not be continuous */
+
 int ccci_md_get_ex_type(struct ccci_modem *md)
 {
 	return mdee_get_ee_type(md->mdee_obj);
@@ -75,6 +77,7 @@ struct ccci_modem *ccci_md_alloc(int private_size)
 	INIT_LIST_HEAD(&md->entry);
 	ccci_reset_seq_num(md);
 	md->md_dbg_dump_flag = MD_DBG_DUMP_ALL;
+	md->needforcestop = 0;
 
 #ifdef FEATURE_SCP_CCCI_SUPPORT
 	INIT_WORK(&md->scp_md_state_sync_work, scp_md_state_sync_work);
@@ -105,7 +108,7 @@ void ccci_md_config(struct ccci_modem *md)
 	/* MD image */
 	md->mem_layout.md_region_phy = md_resv_mem_addr;
 	md->mem_layout.md_region_size = md_resv_mem_size;
-	md->mem_layout.md_region_vir = ioremap_nocache(md->mem_layout.md_region_phy, MD_IMG_DUMP_SIZE);
+	md->mem_layout.md_region_vir = ccci_map_phy_addr(md->mem_layout.md_region_phy, MD_IMG_DUMP_SIZE);
 		/* do not remap whole region, consume too much vmalloc space */
 	/* DSP image */
 	md->mem_layout.dsp_region_phy = 0;
@@ -115,7 +118,7 @@ void ccci_md_config(struct ccci_modem *md)
 	md->mem_layout.smem_region_phy = md_resv_smem_addr;
 	md->mem_layout.smem_region_size = md_resv_smem_size;
 	md->mem_layout.smem_region_vir =
-	    ioremap_nocache(md->mem_layout.smem_region_phy, md->mem_layout.smem_region_size);
+	    ccci_map_phy_addr(md->mem_layout.smem_region_phy, md->mem_layout.smem_region_size);
 
 	/* exception region */
 	md->smem_layout.ccci_exp_smem_base_phy = md->mem_layout.smem_region_phy + CCCI_SMEM_OFFSET_EXCEPTION;
@@ -201,8 +204,9 @@ void ccci_md_config(struct ccci_modem *md)
 	/* md1 md3 shared memory region and remap */
 	get_md1_md3_resv_smem_info(md->index, &md->mem_layout.md1_md3_smem_phy,
 		&md->mem_layout.md1_md3_smem_size);
-	md->mem_layout.md1_md3_smem_vir =
-	    ioremap_nocache(md->mem_layout.md1_md3_smem_phy, md->mem_layout.md1_md3_smem_size);
+	md->mem_layout.md1_md3_smem_vir = ccci_map_phy_addr(
+		md->mem_layout.md1_md3_smem_phy,
+		md->mem_layout.md1_md3_smem_size);
 
 #ifdef CONFIG_MTK_ECCCI_C2K
 	if (md->index == MD_SYS3)
@@ -800,22 +804,18 @@ int ccci_md_prepare_runtime_data(struct ccci_modem *md, struct sk_buff *skb)
 #ifdef FEATURE_C2K_ALWAYS_ON
 				c2k_flags = 0;
 
-#if defined(CONFIG_MTK_MD3_SUPPORT) && (CONFIG_MTK_MD3_SUPPORT > 0)
-				c2k_flags |= (1 << 0);
-#endif
-
-				if (ccci_get_opt_val("opt_c2k_lte_mode") == 1) /* SVLTE_MODE */
-					c2k_flags |= (1 << 1);
-
-				if (ccci_get_opt_val("opt_c2k_lte_mode") == 2) /* SRLTE_MODE */
+				if (is_cdma2000_enable(MD_SYS1)) {
 					c2k_flags |= (1 << 2);
 
-#ifdef CONFIG_MTK_C2K_OM_SOLUTION1
-				c2k_flags |=  (1 << 3);
+#if (MD_GENERATION == 6290 || MD_GENERATION == 6291)
+					c2k_flags |= (1 << 0);
 #endif
-#ifdef CONFIG_CT6M_SUPPORT
-				c2k_flags |= (1 << 4)
-#endif
+				}
+				CCCI_NORMAL_LOG(md->index, KERN,
+					"c2k_flags 0x%X; MD_GENERATION: %d\n",
+					c2k_flags, MD_GENERATION);
+
+
 				rt_f_element.feature[0] = c2k_flags;
 #endif
 				append_runtime_feature(&rt_data, &rt_feature, &rt_f_element);

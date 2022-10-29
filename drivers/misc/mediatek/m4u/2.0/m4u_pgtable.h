@@ -14,7 +14,7 @@
 #ifndef __M4U_PGTABLE_H__
 #define __M4U_PGTABLE_H__
 
-#include "../mt6755/m4u_reg.h"
+#include "m4u_reg.h"
 
 /* ================================================================= */
 /* 2 level pagetable: pgd -> pte */

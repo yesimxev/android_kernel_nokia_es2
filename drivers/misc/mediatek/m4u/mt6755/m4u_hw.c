@@ -867,7 +867,7 @@ static int smi_larb_clock_unprepare(void)
 }
 #endif
 
-static int larb_clock_on(int larb)
+int larb_clock_on(int larb)
 {
 #if defined(CONFIG_MTK_CLKMGR)
 	switch (larb) {
@@ -942,7 +942,7 @@ static int larb_clock_on(int larb)
 	return 0;
 }
 
-static int larb_clock_off(int larb)
+int larb_clock_off(int larb)
 {
 #if defined(CONFIG_MTK_CLKMGR)
 	switch (larb) {

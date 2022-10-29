@@ -2053,6 +2053,9 @@ bool SetI2SADDAEnable(bool bEnable)
 		    && mAudioMEMIF[Soc_Aud_Digital_Block_I2S_IN_ADC]->mState == false) {
 			Afe_Set_Reg(AFE_ADDA_UL_DL_CON0, bEnable, 0x0001);
 		}
+
+		/* should delayed 1/fs(smallest is 8k) = 125us before afe off */
+		usleep_range(125, 150);
 	}
 
 	return true;

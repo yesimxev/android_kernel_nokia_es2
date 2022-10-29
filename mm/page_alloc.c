@@ -169,6 +169,30 @@ bool pm_suspended_storage(void)
 }
 #endif /* CONFIG_PM_SLEEP */
 
+static gfp_t tee_cma_saved_gfp_mask;
+
+void tee_cma_restore_gfp_mask(void)
+{
+#ifdef CONFIG_PM_SLEEP
+	WARN_ON(!mutex_is_locked(&pm_mutex));
+#endif
+	if (tee_cma_saved_gfp_mask)  {
+		gfp_allowed_mask = tee_cma_saved_gfp_mask;
+		tee_cma_saved_gfp_mask = 0;
+	}
+}
+
+void tee_cma_restrict_gfp_mask(void)
+{
+#ifdef CONFIG_PM_SLEEP
+	WARN_ON(!mutex_is_locked(&pm_mutex));
+#endif
+	WARN_ON(tee_cma_saved_gfp_mask);
+	tee_cma_saved_gfp_mask = gfp_allowed_mask;
+	gfp_allowed_mask &= ~__GFP_CMA;
+}
+
+
 #ifdef CONFIG_HUGETLB_PAGE_SIZE_VARIABLE
 unsigned int pageblock_order __read_mostly;
 #endif
@@ -2977,7 +3001,7 @@ __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 	int alloc_flags = ALLOC_WMARK_LOW|ALLOC_CPUSET|ALLOC_FAIR;
 #endif
 #ifdef CONFIG_DMAUSER_PAGES
-	static DEFINE_RATELIMIT_STATE(dmawarn, (180 * HZ), 1);
+	static bool __section(.data.unlikely) __dmawarned;
 #endif
 	int classzone_idx;
 #ifdef __LOG_PAGE_ALLOC_ORDER__
@@ -3091,8 +3115,11 @@ out:
 	 * make sure DMA pages cannot be allocated to non-GFP_DMA users
 	 */
 	if (page && !(gfp_mask & GFP_DMA) && (OPT_ZONE_DMA == page_zonenum(page))) {
-		if (__ratelimit(&dmawarn))
-			aee_kernel_warning("large memory", "out of high-end memory");
+		if (unlikely(!__dmawarned)) {
+			__dmawarned = true;
+			aee_kernel_warning("large memory",
+					"out of high-end memory");
+		}
 	}
 #endif
 
@@ -6887,6 +6914,8 @@ int free_reserved_memory(phys_addr_t start_phys,
 			, __func__, &start_phys, &end_phys);
 		return -1;
 	}
+
+	memblock_free(start_phys, (end_phys - start_phys));
 
 	for (pos = start_phys; pos < end_phys; pos += PAGE_SIZE, pages++)
 		free_reserved_page(phys_to_page(pos));

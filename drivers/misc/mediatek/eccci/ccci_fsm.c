@@ -14,9 +14,33 @@
 #include "ccci_core.h"
 #include "ccci_modem.h"
 #include "mdee_ctl.h"
+#include "ccci_bm.h"
 
 static void ccci_fsm_finish_command(struct ccci_modem *md, struct ccci_fsm_command *cmd, int result);
 static void ccci_fsm_finish_event(struct ccci_modem *md, struct ccci_fsm_event *event);
+
+static int mdinit_killed;
+
+void set_mdinit_killed(int killed)
+{
+	mdinit_killed = killed;
+}
+
+int get_mdinit_killed(void)
+{
+	return mdinit_killed;
+}
+
+int force_md_stop(struct ccci_modem *md)
+{
+	int ret = -1;
+
+	md->needforcestop = 1;
+	ret = ccci_fsm_append_command(md, CCCI_COMMAND_STOP, 0);
+	CCCI_NORMAL_LOG(md->index, FSM,
+			"force md stop\n");
+	return ret;
+}
 
 static struct ccci_fsm_command *ccci_check_for_ee(struct ccci_fsm_ctl *ctl, int xip)
 {
@@ -158,6 +182,7 @@ static void ccci_routine_exception(struct ccci_fsm_ctl *ctl, struct ccci_fsm_com
 	default:
 		break;
 	}
+	inject_md_status_event(md->index, MD_STA_EV_EXCEPTION, NULL);
 	/* 3. always end in exception state */
 	if (cmd)
 		ccci_fsm_finish_command(md, cmd, 1);
@@ -182,7 +207,7 @@ static void ccci_routine_start(struct ccci_fsm_ctl *ctl, struct ccci_fsm_command
 	ctl->last_state = ctl->curr_state;
 	ctl->curr_state = CCCI_FSM_STARTING;
 	/* 2. poll for critical users exit */
-	while (count < BOOT_TIMEOUT/EVENT_POLL_INTEVAL) {
+	while (count < BOOT_TIMEOUT/EVENT_POLL_INTEVAL && !md->needforcestop) {
 		if (port_proxy_check_critical_user(md->port_proxy_obj) == 0) {
 			user_exit = 1;
 			break;
@@ -210,7 +235,7 @@ static void ccci_routine_start(struct ccci_fsm_ctl *ctl, struct ccci_fsm_command
 	if (ret)
 		goto fail;
 	count = 0;
-	while (count < BOOT_TIMEOUT/EVENT_POLL_INTEVAL) {
+	while (count < BOOT_TIMEOUT/EVENT_POLL_INTEVAL && !md->needforcestop) {
 		spin_lock_irqsave(&md->fsm.event_lock, flags);
 		if (!list_empty(&ctl->event_queue)) {
 			event = list_first_entry(&ctl->event_queue, struct ccci_fsm_event, entry);
@@ -239,6 +264,10 @@ static void ccci_routine_start(struct ccci_fsm_ctl *ctl, struct ccci_fsm_command
 			count++;
 		msleep(EVENT_POLL_INTEVAL);
 	}
+	if (md->needforcestop) {
+		ccci_fsm_finish_command(md, cmd, -1);
+		return;
+	}
 	/* 4. check result, finish command */
 fail:
 	if (hs1_got)
@@ -265,11 +294,15 @@ static void ccci_routine_stop(struct ccci_fsm_ctl *ctl, struct ccci_fsm_command 
 	struct ccci_fsm_event *event, *next;
 	struct ccci_fsm_command *ee_cmd = NULL;
 	unsigned long flags;
+	struct ccci_port *port = NULL;
+	struct sk_buff *skb = NULL;
+	struct port_proxy *proxy_p = NULL;
 
 	/* 1. state sanity check */
 	if (ctl->curr_state == CCCI_FSM_GATED)
 		goto success;
-	if (ctl->curr_state != CCCI_FSM_READY && ctl->curr_state != CCCI_FSM_EXCEPTION) {
+	if (ctl->curr_state != CCCI_FSM_READY && ctl->curr_state != CCCI_FSM_EXCEPTION &&
+				!md->needforcestop) {
 		ccci_fsm_finish_command(md, cmd, -1);
 		ccci_routine_zombie(ctl);
 		return;
@@ -296,6 +329,33 @@ static void ccci_routine_stop(struct ccci_fsm_ctl *ctl, struct ccci_fsm_command 
 	spin_unlock_irqrestore(&md->fsm.event_lock, flags);
 	/* 6. always end in stopped state */
 success:
+	/* when MD is stopped, the skb list of ccci_fs should be clean */
+	proxy_p = port_proxy_get_by_md_id(md->index);
+	if (proxy_p) {
+		port = port_proxy_get_port_by_channel(proxy_p, CCCI_FS_RX);
+		if (port && (port->flags & PORT_F_CLEAN)) {
+			CCCI_NORMAL_LOG(md->index, FSM,
+				"clear port:%s skb list data. qlen: %d\n",
+				port->name, port->rx_skb_list.qlen);
+
+			spin_lock_irqsave(&port->rx_skb_list.lock, flags);
+			while ((skb = __skb_dequeue(&port->rx_skb_list)) != NULL)
+				ccci_free_skb(skb);
+			spin_unlock_irqrestore(&port->rx_skb_list.lock, flags);
+
+		} else if (!port)
+			CCCI_NORMAL_LOG(md->index, FSM,
+				"not find port: md_id:%d, ch:CCCI_FS_RX\n",
+				md->index);
+
+	} else
+		CCCI_NORMAL_LOG(md->index, FSM,
+			"not find proxy: md_id:%d\n",
+			md->index);
+
+	inject_md_status_event(md->index, MD_STA_EV_STOP, NULL);
+	if (md->needforcestop)
+		md->needforcestop = 0;
 	ctl->last_state = ctl->curr_state;
 	ctl->curr_state = CCCI_FSM_GATED;
 	ccci_fsm_finish_command(md, cmd, 1);

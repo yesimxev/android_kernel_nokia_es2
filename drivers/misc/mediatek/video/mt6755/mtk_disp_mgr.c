@@ -917,7 +917,28 @@ static int input_config_preprocess(struct disp_frame_cfg_t *cfg)
 	}
 	return 0;
 }
+#define GET_DISP_FORMAT_ID(fmt) ((fmt) >> 8)
 
+static int _disp_validate_color_fmt(DISP_FORMAT fmt)
+{
+	unsigned int fmt_id = 0;
+
+	fmt_id = GET_DISP_FORMAT_ID(fmt);
+	if (fmt_id < GET_DISP_FORMAT_ID(DISP_FORMAT_RGB565) ||
+	    fmt_id > GET_DISP_FORMAT_ID(DISP_FORMAT_DIM) || fmt_id == 15) {
+		DISPERR("%s: error format 0x%x\n", __func__, fmt);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+static int _disp_validate_session_output_params(disp_session_output_config *cfg)
+{
+	if (_disp_validate_color_fmt(cfg->config.fmt))
+		return -EINVAL;
+
+	return 0;
+}
 static int __set_input(disp_session_input_config *session_input, int overlap_layer_num)
 {
 	int ret = 0;
@@ -1153,7 +1174,8 @@ int _ioctl_set_output_buffer(unsigned long arg)
 		DISPERR("[FB]: copy_from_user failed! line:%d\n", __LINE__);
 		return -EFAULT;
 	}
-
+	if (_disp_validate_session_output_params(&session_output))
+		return -EINVAL;
 	return __set_output(&session_output);
 }
 
@@ -1186,7 +1208,8 @@ static int __frame_config_set_output(struct disp_frame_cfg_t *frame_cfg)
 
 	session_output.session_id = frame_cfg->session_id;
 	memcpy(&session_output.config, &frame_cfg->output_cfg, sizeof(frame_cfg->output_cfg));
-
+	if (_disp_validate_session_output_params(&session_output))
+		return -EINVAL;
 	return __set_output(&session_output);
 }
 
@@ -1486,6 +1509,8 @@ const char *_session_ioctl_spy(unsigned int cmd)
 		return "DISP_IOCTL_CCORR_EVENTCTL";
 	case DISP_IOCTL_CCORR_GET_IRQ:
 		return "DISP_IOCTL_CCORR_GET_IRQ";
+	case DISP_IOCTL_SUPPORT_COLOR_TRANSFORM:
+		return "DISP_IOCTL_SUPPORT_COLOR_TRANSFORM";
 	case DISP_IOCTL_SET_PQPARAM:
 		return "DISP_IOCTL_SET_PQPARAM";
 	case DISP_IOCTL_GET_PQPARAM:
@@ -1603,6 +1628,7 @@ long mtk_disp_mgr_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case DISP_IOCTL_SET_CCORR:
 	case DISP_IOCTL_CCORR_EVENTCTL:
 	case DISP_IOCTL_CCORR_GET_IRQ:
+	case DISP_IOCTL_SUPPORT_COLOR_TRANSFORM:
 	case DISP_IOCTL_SET_PQPARAM:
 	case DISP_IOCTL_GET_PQPARAM:
 	case DISP_IOCTL_SET_PQINDEX:
@@ -1801,6 +1827,7 @@ static long mtk_disp_mgr_compat_ioctl(struct file *file, unsigned int cmd,  unsi
 	case DISP_IOCTL_READ_SW_REG:
 	case DISP_IOCTL_CCORR_EVENTCTL:
 	case DISP_IOCTL_CCORR_GET_IRQ:
+	case DISP_IOCTL_SUPPORT_COLOR_TRANSFORM:
 		{
 			ret = primary_display_user_cmd(cmd, arg);
 			break;

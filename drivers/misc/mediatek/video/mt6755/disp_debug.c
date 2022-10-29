@@ -716,6 +716,7 @@ void mtkfb_process_dbg_opt(const char *opt)
 	} else if (0 == strncmp(opt, "lcm0_reset", 10)) {
 		DISPMSG("lcm0_reset\n");
 #if 1
+		primary_display_idlemgr_kick((char *)__func__, 1);
 		DISP_CPU_REG_SET(DISPSYS_CONFIG_BASE + 0x150, 1);
 		msleep(20);
 		DISP_CPU_REG_SET(DISPSYS_CONFIG_BASE + 0x150, 0);
@@ -739,8 +740,10 @@ void mtkfb_process_dbg_opt(const char *opt)
 #endif
 #endif
 	} else if (0 == strncmp(opt, "lcm0_reset0", 11)) {
+		primary_display_idlemgr_kick((char *)__func__, 1);
 		DISP_CPU_REG_SET(DDP_REG_BASE_MMSYS_CONFIG + 0x150, 0);
 	} else if (0 == strncmp(opt, "lcm0_reset1", 11)) {
+		primary_display_idlemgr_kick((char *)__func__, 1);
 		DISP_CPU_REG_SET(DDP_REG_BASE_MMSYS_CONFIG + 0x150, 1);
 	} else if (0 == strncmp(opt, "dump_layer:", 11)) {
 		if (0 == strncmp(opt + 11, "on", 2)) {

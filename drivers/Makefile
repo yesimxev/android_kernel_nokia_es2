@@ -52,6 +52,7 @@ obj-y				+= char/
 
 # gpu/ comes after char for AGP vs DRM startup
 obj-y				+= gpu/
+$(info MTK GPU +=gpu/ here)
 
 obj-$(CONFIG_CONNECTOR)		+= connector/
 

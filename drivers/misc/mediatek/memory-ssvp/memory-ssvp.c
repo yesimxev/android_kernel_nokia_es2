@@ -45,8 +45,8 @@ const int is_pre_reserve_memory;
 #define	COUNT_DOWN_LIMIT (COUNT_DOWN_MS / COUNT_DOWN_INTERVAL)
 static atomic_t svp_online_count_down;
 
-/* 64 MB alignment */
-#define SSVP_CMA_ALIGN_PAGE_ORDER 14
+/* 16 MB alignment */
+#define SSVP_CMA_ALIGN_PAGE_ORDER 12
 #define SSVP_ALIGN_SHIFT (SSVP_CMA_ALIGN_PAGE_ORDER + PAGE_SHIFT)
 #define SSVP_ALIGN (1 << SSVP_ALIGN_SHIFT)
 

@@ -1494,29 +1494,22 @@ static struct snd_soc_dai_link mt_soc_dai_common[] = {
 	 .init = mt_soc_audio_init,
 	 .ops = &mt_machine_audio_ops,
 	 },
-#ifdef CONFIG_MTK_BTCVSD_ALSA
-	 {
-	 .name = "BTCVSD_RX",
-	 .stream_name = MT_SOC_BTCVSD_CAPTURE_STREAM_NAME,
-	 .cpu_dai_name   = MT_SOC_BTCVSD_RX_DAI_NAME,
-	 .platform_name  = MT_SOC_BTCVSD_RX_PCM,
-	 .codec_dai_name = MT_SOC_CODEC_BTCVSD_RX_DAI_NAME,
-	 .codec_name = MT_SOC_CODEC_DUMMY_NAME,
-	 .init = mt_soc_audio_init,
-	 .ops = &mt_machine_audio_ops,
-	 },
-	 {
-	 .name = "BTCVSD_TX",
-	 .stream_name = MT_SOC_BTCVSD_PLAYBACK_STREAM_NAME,
-	 .cpu_dai_name   = MT_SOC_BTCVSD_TX_DAI_NAME,
-	 .platform_name  = MT_SOC_BTCVSD_TX_PCM,
-	 .codec_dai_name = MT_SOC_CODEC_BTCVSD_TX_DAI_NAME,
-	 .codec_name = MT_SOC_CODEC_DUMMY_NAME,
-	 .init = mt_soc_audio_init,
-	 .ops = &mt_machine_audio_ops,
-	 },
-#endif
 };
+
+#ifdef CONFIG_MTK_BTCVSD_ALSA
+static struct snd_soc_dai_link mt_soc_btcvsd_dai[] = {
+	{
+	 .name = "BTCVSD",
+	 .stream_name = "BTCVSD",
+	 .cpu_dai_name   = "snd-soc-dummy-dai",
+	 .codec_dai_name = "snd-soc-dummy-dai",
+	 .codec_name = "snd-soc-dummy",
+	 },
+};
+static struct snd_soc_dai_link mt_soc_dai_component[
+	ARRAY_SIZE(mt_soc_dai_common) +
+	ARRAY_SIZE(mt_soc_btcvsd_dai)];
+#endif
 
 static const char const *I2S_low_jittermode[] = { "Off", "On" };
 
@@ -1559,9 +1552,36 @@ static struct platform_device *mt_snd_device;
 static int __init mt_soc_snd_init(void)
 {
 	int ret;
+#ifdef CONFIG_MTK_BTCVSD_ALSA
+	int daiLinkNum = 0;
+	struct device_node *btcvsd_node;
+#endif
 	struct snd_soc_card *card = &snd_soc_card_mt;
 
 	pr_debug("mt_soc_snd_init card addr = %p\n", card);
+
+#ifdef CONFIG_MTK_BTCVSD_ALSA
+	/* DEAL WITH DAI LINK */
+	memcpy(mt_soc_dai_component, mt_soc_dai_common, sizeof(mt_soc_dai_common));
+
+	daiLinkNum += ARRAY_SIZE(mt_soc_dai_common);
+	/* assign btcvsd platform_node */
+	btcvsd_node = of_find_compatible_node(NULL, NULL,
+					      "mediatek,mtk-btcvsd-snd");
+	if (!btcvsd_node) {
+		pr_err("Property 'btcvsd_snd' missing or invalid\n");
+		return -EINVAL;
+	}
+	mt_soc_btcvsd_dai[0].platform_of_node = btcvsd_node;
+	memcpy(mt_soc_dai_component + daiLinkNum,
+	       mt_soc_btcvsd_dai, sizeof(mt_soc_btcvsd_dai));
+	daiLinkNum += ARRAY_SIZE(mt_soc_btcvsd_dai);
+
+	snd_soc_card_mt.dai_link = mt_soc_dai_component;
+	snd_soc_card_mt.num_links = daiLinkNum;
+	snd_soc_card_mt.controls = mt_soc_controls;
+	snd_soc_card_mt.num_controls = ARRAY_SIZE(mt_soc_controls);
+#endif
 
 	mt_snd_device = platform_device_alloc("soc-audio", -1);
 	if (!mt_snd_device) {

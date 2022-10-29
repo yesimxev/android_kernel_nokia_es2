@@ -20,7 +20,7 @@ obj-y += auddrv_devtree_parser.o
 obj-y += auddrv_underflow_mach.o
 
 # btcvsd
-obj-$(CONFIG_MTK_BTCVSD_ALSA) += mt_soc_pcm_btcvsd.o mt_soc_pcm_btcvsd_rx.o mt_soc_pcm_btcvsd_tx.o
+obj-$(CONFIG_MTK_BTCVSD_ALSA) += mtk-btcvsd.o
 
 # New kernel architecture
 ifeq ($(CONFIG_MTK_SND_SOC_NEW_ARCH),y)

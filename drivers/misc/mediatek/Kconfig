@@ -472,6 +472,10 @@ config MTK_DM_VERITY_OFF
 	bool "Disable dm-verity"
 	default n
 
+config HID_PLANTRONICS
+	bool "HID Plan tronics"
+	default y
+
 endmenu    # Misc
 
 endif
