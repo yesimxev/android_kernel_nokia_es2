@@ -1097,9 +1097,6 @@ static int tpd_local_init(void)
 		    FTS_ERROR("Chargeing  mode, Disable TP driver");
 		    return -1;
 #endif
-	    case RECOVERY_BOOT:
-		    FTS_ERROR("Recovery mode, Disable TP driver");
-		    return -1;
 	    default:
 		    break;
     }

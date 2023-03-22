@@ -1864,9 +1864,6 @@ static int nvt_local_init(void)
 			NVT_ERR("Chargeing  mode, Disable TP driver");
 			return -1;
 #endif
-		case RECOVERY_BOOT:
-			NVT_ERR("Recovery mode, Disable TP driver");
-			return -1;
 		default:
 			break;
 	}
