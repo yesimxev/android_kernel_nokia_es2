@@ -1,0 +1,4 @@
+
+config MTK_BMG160
+	bool "BMG160_NEW for MediaTek package"
+	default n
