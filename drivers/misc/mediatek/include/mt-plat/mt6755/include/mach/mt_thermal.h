@@ -24,7 +24,7 @@
 
 #include "mt-plat/sync_write.h"
 #include "mtk_thermal_typedefs.h"
-#include "mt_gpufreq.h"
+#include "../../../../base/power/mt6755/mt_gpufreq.h"
 
 /*
 Bank0 : CPU_mp0     (TS_MCU4)
