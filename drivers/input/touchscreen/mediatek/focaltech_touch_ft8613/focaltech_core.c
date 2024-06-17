@@ -1097,9 +1097,11 @@ static int tpd_local_init(void)
 		    FTS_ERROR("Chargeing  mode, Disable TP driver");
 		    return -1;
 #endif
+/***** Avoid disabling touch in recovery
 	    case RECOVERY_BOOT:
 		    FTS_ERROR("Recovery mode, Disable TP driver");
 		    return -1;
+*/
 	    default:
 		    break;
     }
