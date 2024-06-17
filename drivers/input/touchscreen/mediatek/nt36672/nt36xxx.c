@@ -1864,9 +1864,11 @@ static int nvt_local_init(void)
 			NVT_ERR("Chargeing  mode, Disable TP driver");
 			return -1;
 #endif
+/***** Avoid disabling touch in recovery
 		case RECOVERY_BOOT:
 			NVT_ERR("Recovery mode, Disable TP driver");
 			return -1;
+*/
 		default:
 			break;
 	}
